@@ -17,6 +17,27 @@ export function randomState(): string {
   return crypto.randomBytes(4).toString("hex");
 }
 
+/** Trim and drop a trailing slash so the value can match the dashboard character for character. */
+export function normalizeRedirectUri(value: string): string {
+  const trimmed = value.trim();
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error(`WHOOP_REDIRECT_URI is not a valid URL: ${trimmed}`);
+  }
+  if (url.username || url.password || url.hash || url.search) {
+    throw new Error("WHOOP_REDIRECT_URI must be an origin plus path, with no query, fragment, or userinfo.");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("WHOOP_REDIRECT_URI must be http:// or https:// so this machine can receive the login redirect.");
+  }
+  let path = url.pathname || "/";
+  if (path.length > 1) path = path.replace(/\/+$/, "");
+  const port = url.port ? `:${url.port}` : "";
+  return `${url.protocol}//${url.hostname}${port}${path}`;
+}
+
 export function buildAuthorizeUrl(config: AppConfig, state: string): string {
   if (!config.clientId || !config.redirectUri) {
     throw new Error("WHOOP_CLIENT_ID and WHOOP_REDIRECT_URI are required.");
@@ -27,7 +48,7 @@ export function buildAuthorizeUrl(config: AppConfig, state: string): string {
   const url = new URL(WHOOP_AUTHORIZE_URL);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", config.clientId);
-  url.searchParams.set("redirect_uri", config.redirectUri);
+  url.searchParams.set("redirect_uri", normalizeRedirectUri(config.redirectUri));
   url.searchParams.set("scope", WHOOP_SCOPES.join(" "));
   url.searchParams.set("state", state);
   return url.toString();
@@ -72,13 +93,20 @@ export async function refreshAccessToken(
 export async function runAuthFlow(config: AppConfig, fetchImpl: typeof fetch = fetch): Promise<void> {
   required(config.clientId, "WHOOP_CLIENT_ID");
   required(config.clientSecret, "WHOOP_CLIENT_SECRET");
-  const redirectUri = required(config.redirectUri, "WHOOP_REDIRECT_URI");
+  const redirectUri = normalizeRedirectUri(required(config.redirectUri, "WHOOP_REDIRECT_URI"));
+  const normalized = { ...config, redirectUri };
   const state = randomState();
-  const authorizeUrl = buildAuthorizeUrl(config, state);
+  const authorizeUrl = buildAuthorizeUrl(normalized, state);
+  console.error("Whoop only accepts a redirect URI that is saved on this app.");
+  console.error("Developer Dashboard → your app → edit → Redirect URIs. Add this exact line and save:");
+  console.error(`  ${redirectUri}`);
+  console.error("The page \"redirect_uri does not match any of the OAuth 2.0 Client's pre-registered redirect urls\" means that line is missing or different.");
+  console.error("localhost and 127.0.0.1 are not interchangeable, and a trailing slash will not match.");
+  console.error("");
   console.error("Open this URL to authorize Whoop (official OAuth only):");
   console.error(authorizeUrl);
   const code = await waitForAuthorizationCode(new URL(redirectUri), state);
-  const tokens = await exchangeAuthorizationCode(config, code, fetchImpl);
+  const tokens = await exchangeAuthorizationCode(normalized, code, fetchImpl);
   writeTokens(config.tokenPath, tokens);
   console.error(`Saved tokens to ${config.tokenPath}`);
 }
@@ -138,25 +166,49 @@ async function requestToken(
   return tokens;
 }
 
+function callbackHosts(hostname: string): string[] {
+  // "localhost" on macOS can be 127.0.0.1 or ::1. Binding only one of them drops the redirect.
+  if (hostname === "localhost") return ["127.0.0.1", "::1"];
+  return [hostname];
+}
+
 function waitForAuthorizationCode(redirect: URL, expectedState: string): Promise<string> {
   const port = redirect.port ? Number(redirect.port) : redirect.protocol === "https:" ? 443 : 80;
-  const host = redirect.hostname;
   const pathname = redirect.pathname || "/";
+  const hosts = callbackHosts(redirect.hostname);
 
   return new Promise((resolve, reject) => {
     let settled = false;
-    const server = http.createServer((req, res) => {
-      const url = new URL(req.url ?? "/", `http://${host}`);
+    const servers: http.Server[] = [];
+    let listening = 0;
+
+    const timer = setTimeout(() => {
+      finish(new Error("Timed out waiting for the Whoop redirect. Re-run `npm run auth`."));
+    }, 180_000);
+
+    function finish(err: Error | null, code?: string) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      for (const server of servers) server.close();
+      if (err) reject(err);
+      else resolve(code ?? "");
+    }
+
+    function handler(req: http.IncomingMessage, res: http.ServerResponse) {
+      const url = new URL(req.url ?? "/", "http://127.0.0.1");
       if (url.pathname !== pathname) {
         res.writeHead(404, { "Content-Type": "text/plain" });
         res.end("Not found");
         return;
       }
       const error = url.searchParams.get("error");
+      const description = url.searchParams.get("error_description");
       if (error) {
         res.writeHead(400, { "Content-Type": "text/plain" });
         res.end("Whoop authorization failed. You can close this window.");
-        finish(new Error(`Whoop authorization failed: ${error}`));
+        const detail = description ? `${error}: ${description}` : error;
+        finish(new Error(`Whoop authorization failed: ${detail}`));
         return;
       }
       const state = url.searchParams.get("state");
@@ -170,23 +222,19 @@ function waitForAuthorizationCode(redirect: URL, expectedState: string): Promise
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end("<!doctype html><title>whoop-mcp</title><p>Whoop authorized. You can close this window.</p>");
       finish(null, code);
-    });
-
-    const timer = setTimeout(() => {
-      finish(new Error("Timed out waiting for the Whoop redirect. Re-run `npm run auth`."));
-    }, 180_000);
-
-    function finish(err: Error | null, code?: string) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      server.close();
-      if (err) reject(err);
-      else resolve(code ?? "");
     }
 
-    server.on("error", (err) => finish(err));
-    server.listen(port, host);
+    for (const host of hosts) {
+      const server = http.createServer(handler);
+      servers.push(server);
+      server.on("error", (err: NodeJS.ErrnoException) => {
+        if ((err.code === "EAFNOSUPPORT" || err.code === "EADDRNOTAVAIL") && listening > 0) return;
+        finish(err);
+      });
+      server.listen(port, host, () => {
+        listening += 1;
+      });
+    }
   });
 }
 

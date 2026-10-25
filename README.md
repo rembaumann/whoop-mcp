@@ -135,7 +135,7 @@ Required environment variables (see `.env.example`; `.env` is gitignored):
 |---|---|
 | `WHOOP_CLIENT_ID` | Client ID from the Whoop developer dashboard |
 | `WHOOP_CLIENT_SECRET` | Client secret. Never commit this |
-| `WHOOP_REDIRECT_URI` | Redirect registered on the app. Local default `http://127.0.0.1:8787/callback` |
+| `WHOOP_REDIRECT_URI` | Redirect saved on the Whoop app. Local default `http://localhost:8080/callback` |
 | `WHOOP_TIMEZONE` | Optional IANA zone for "today" / "yesterday" (else `TZ`, else `UTC`) |
 | `WHOOP_DATA_DIR` | Optional. Defaults to `~/.whoop-mcp` |
 
@@ -153,7 +153,11 @@ See [`evals/cases.md`](evals/cases.md). Fixture translation: [`evals/fixtures/ca
 
 ## Install
 
-Node 20+. Create an app at [developer.whoop.com](https://developer.whoop.com) and register the redirect URI exactly.
+Node 20+. Create an app at [developer.whoop.com](https://developer.whoop.com). On that app, add this Redirect URI and save:
+
+`http://localhost:8080/callback`
+
+Whoop compares it character for character. `localhost` and `127.0.0.1` do not match, and a trailing slash does not match. If the dashboard already has a different URI, put that exact value in `WHOOP_REDIRECT_URI` instead.
 
 ```bash
 npm install
@@ -161,6 +165,8 @@ npm run build
 cp .env.example .env   # fill WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET, WHOOP_REDIRECT_URI
 npm run auth           # browser login; tokens stay in ~/.whoop-mcp
 ```
+
+If the browser says the `redirect_uri` is not a pre-registered redirect URL, the dashboard value and `WHOOP_REDIRECT_URI` still differ. `npm run auth` prints the URI it is sending.
 
 The stdio server is `node dist/index.js`. Put the same env vars on the MCP process (Cursor may not use the repo `.env` as its cwd). Run `npm run auth` once in a terminal before asking an agent for recovery data.
 
@@ -177,7 +183,7 @@ The stdio server is `node dist/index.js`. Put the same env vars on the MCP proce
       "env": {
         "WHOOP_CLIENT_ID": "your-client-id",
         "WHOOP_CLIENT_SECRET": "your-client-secret",
-        "WHOOP_REDIRECT_URI": "http://127.0.0.1:8787/callback",
+        "WHOOP_REDIRECT_URI": "http://localhost:8080/callback",
         "WHOOP_TIMEZONE": "America/New_York"
       }
     }
@@ -198,7 +204,7 @@ The stdio server is `node dist/index.js`. Put the same env vars on the MCP proce
       "env": {
         "WHOOP_CLIENT_ID": "your-client-id",
         "WHOOP_CLIENT_SECRET": "your-client-secret",
-        "WHOOP_REDIRECT_URI": "http://127.0.0.1:8787/callback",
+        "WHOOP_REDIRECT_URI": "http://localhost:8080/callback",
         "WHOOP_TIMEZONE": "America/New_York"
       }
     }

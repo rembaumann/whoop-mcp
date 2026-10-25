@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { buildAuthorizeUrl, exchangeAuthorizationCode, randomState, scrubSecrets } from "../src/auth/oauth.js";
+import { buildAuthorizeUrl, exchangeAuthorizationCode, normalizeRedirectUri, randomState, scrubSecrets } from "../src/auth/oauth.js";
 import { readTokens, writeTokens } from "../src/auth/tokens.js";
 import { WHOOP_SCOPES, type AppConfig } from "../src/config.js";
 import { WhoopClient } from "../src/whoop/client.js";
@@ -20,6 +20,12 @@ function config(dir: string): AppConfig {
     intentPath: path.join(dir, "intents.json"),
   };
 }
+
+test("redirect URI normalization drops a trailing slash and keeps the host", () => {
+  assert.equal(normalizeRedirectUri("http://localhost:8080/callback/"), "http://localhost:8080/callback");
+  assert.equal(normalizeRedirectUri("  http://127.0.0.1:8787/callback  "), "http://127.0.0.1:8787/callback");
+  assert.notEqual(normalizeRedirectUri("http://localhost:8080/callback"), normalizeRedirectUri("http://127.0.0.1:8080/callback"));
+});
 
 test("authorize URL requests recovery, sleep, cycle, and offline scopes", () => {
   const app = config(fs.mkdtempSync(path.join(os.tmpdir(), "whoop-oauth-")));
