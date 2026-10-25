@@ -1,0 +1,188 @@
+{
+  "source": "evals/cases.md",
+  "timezone": "America/New_York",
+  "today": "2026-03-16",
+  "baselines": {
+    "recovery": 55,
+    "hrv": 60,
+    "rhr": 54,
+    "sleep_performance": 82
+  },
+  "cases": [
+    {
+      "id": "01",
+      "title": "drinks night, in band (expected)",
+      "tool": "explain_yesterday",
+      "input": {},
+      "intents": [
+        { "date": "2026-03-14", "type": "drinks", "note": "evening before" }
+      ],
+      "days": {
+        "2026-03-15": { "recovery": 36, "hrv": 48, "rhr": 58, "sleep_performance": 71 }
+      },
+      "expect": {
+        "band": "expected",
+        "matched_types": ["drinks"],
+        "text_includes": ["36", "55"],
+        "text_forbids": ["unexplained", "anomaly", "you are sick", "you are ill", "you're sick", "you're ill"]
+      }
+    },
+    {
+      "id": "02",
+      "title": "unexplained crash",
+      "tool": "explain_yesterday",
+      "input": {},
+      "intents": [],
+      "days": {
+        "2026-03-15": { "recovery": 34, "hrv": 42, "rhr": 62, "sleep_performance": 68 }
+      },
+      "expect": {
+        "band": "unexplained",
+        "matched_types": [],
+        "hypotheses_min": 2,
+        "hypothesis_themes_min": 2,
+        "text_includes": ["off baseline", "no logged explanation"],
+        "text_forbids": ["you are sick", "you are ill", "you're sick", "you're ill"]
+      }
+    },
+    {
+      "id": "03",
+      "title": "missing Whoop data",
+      "tool": "explain_yesterday",
+      "input": {},
+      "intents": [
+        { "date": "2026-03-14", "type": "late_night", "note": "night before" }
+      ],
+      "days": {
+        "2026-03-15": null
+      },
+      "expect": {
+        "band": "insufficient_data",
+        "matched_types": [],
+        "evidence_empty": true,
+        "missing_includes": "recovery",
+        "text_forbids": ["you are sick", "you are ill"]
+      }
+    },
+    {
+      "id": "04",
+      "title": "good day, no intents",
+      "tool": "explain_yesterday",
+      "input": {},
+      "intents": [],
+      "days": {
+        "2026-03-15": { "recovery": 62, "hrv": 65, "rhr": 52, "sleep_performance": 88 }
+      },
+      "expect": {
+        "band": "expected",
+        "matched_types": [],
+        "evidence_metrics": ["recovery"],
+        "text_includes": ["62", "55"],
+        "text_forbids": ["unexplained", "anomaly", "you are sick", "you are ill", "you're sick", "you're ill"]
+      }
+    },
+    {
+      "id": "05",
+      "title": "late night explains sleep hit",
+      "tool": "explain_yesterday",
+      "input": {},
+      "intents": [
+        { "date": "2026-03-14", "type": "late_night", "note": "night before" }
+      ],
+      "days": {
+        "2026-03-15": { "recovery": 41, "hrv": 52, "rhr": 56, "sleep_performance": 60 }
+      },
+      "expect": {
+        "band": "expected",
+        "matched_types": ["late_night"],
+        "evidence_metrics": ["sleep_performance"],
+        "text_includes": ["60"],
+        "text_forbids": ["you are sick", "you are ill", "you're sick", "you're ill"]
+      }
+    },
+    {
+      "id": "06",
+      "title": "heavy squat + unexplained",
+      "tool": "today_training_call",
+      "input": { "planned_session": "heavy_squat", "optional_notes": "Day 4" },
+      "intents": [],
+      "days": {
+        "2026-03-15": { "recovery": 34, "hrv": 42, "rhr": 62, "sleep_performance": 68 },
+        "2026-03-16": { "recovery": 33, "hrv": 44, "rhr": 61, "sleep_performance": 70 }
+      },
+      "expect": {
+        "call": ["go_lighter", "swap", "rest"],
+        "text_forbids": ["you are sick", "you are ill"]
+      }
+    },
+    {
+      "id": "07",
+      "title": "heavy deadlift + expected drinks dip",
+      "tool": "today_training_call",
+      "input": { "planned_session": "heavy_deadlift" },
+      "intents": [
+        { "date": "2026-03-14", "type": "drinks", "note": "evening before" }
+      ],
+      "days": {
+        "2026-03-15": { "recovery": 36, "hrv": 48, "rhr": 58, "sleep_performance": 71 },
+        "2026-03-16": { "recovery": 38, "hrv": 50, "rhr": 57, "sleep_performance": 74 }
+      },
+      "expect": {
+        "call": "go_lighter",
+        "alternate_includes": ["5-10%", "deadlift"],
+        "text_forbids": ["you are sick", "you are ill"]
+      }
+    },
+    {
+      "id": "08",
+      "title": "severely low after drinks",
+      "tool": "today_training_call",
+      "input": { "planned_session": "heavy_bench" },
+      "intents": [
+        { "date": "2026-03-15", "type": "drinks", "note": "last night" }
+      ],
+      "days": {
+        "2026-03-16": { "recovery": 18, "hrv": 35, "rhr": 66, "sleep_performance": 64 }
+      },
+      "expect": {
+        "call": ["rest", "swap", "go_lighter"],
+        "text_forbids": ["you are sick", "you are ill"]
+      }
+    },
+    {
+      "id": "09",
+      "title": "knee niggle + heavy squat",
+      "tool": "today_training_call",
+      "input": { "planned_session": "heavy_squat" },
+      "intents": [
+        { "date": "2026-03-14", "type": "niggle", "body_area": "knee", "note": "tender on stairs" }
+      ],
+      "days": {
+        "2026-03-16": { "recovery": 52, "hrv": 61, "rhr": 53, "sleep_performance": 84 }
+      },
+      "expect": {
+        "call": ["go_lighter", "swap", "rest"],
+        "text_includes": ["knee"],
+        "alternate_includes": ["squat", "60%"],
+        "text_forbids": ["you are sick", "you are ill"]
+      }
+    },
+    {
+      "id": "10",
+      "title": "accessories + expected dip",
+      "tool": "today_training_call",
+      "input": { "planned_session": "accessories" },
+      "intents": [
+        { "date": "2026-03-14", "type": "drinks", "note": "evening before" }
+      ],
+      "days": {
+        "2026-03-15": { "recovery": 36, "hrv": 48, "rhr": 58, "sleep_performance": 71 },
+        "2026-03-16": { "recovery": 36, "hrv": 48, "rhr": 58, "sleep_performance": 71 }
+      },
+      "expect": {
+        "call": ["go", "go_lighter"],
+        "text_forbids": ["you are sick", "you are ill"]
+      }
+    }
+  ]
+}
