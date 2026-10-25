@@ -14,7 +14,7 @@ Built for active people who use personal AI assistants and want more determinist
 
 | Stage | What's in | State |
 |---|---|---|
-| **v0 (current)** | Intent log, recovery in-band / debug, training call | Spec locked; implementation not started |
+| **v0 (current)** | Intent log, recovery in-band / debug, training call | v0 runnable (10/10 fixture evals) |
 | **v1 (planned)** | Reconcile workouts in Google Sheets/Drive with Whoop (catch missing strain) | Spec only |
 | **v2 (planned)** | Session effort vs expected (trainer days vs solo) | Spec only |
 | **Later** | Calendar load as context; smarter journal assists | Ideas |
@@ -127,11 +127,23 @@ Use the in-band / debug result to recommend today's session.
 
 ## Auth
 
-Official Whoop Developer API OAuth only. Local token storage. Document required scopes for recovery, sleep, and cycle/strain data.
+Official Whoop Developer API OAuth only ([authorization](https://api.prod.whoop.com/oauth/oauth2/auth), [token](https://api.prod.whoop.com/oauth/oauth2/token)). Local token storage under `~/.whoop-mcp/tokens.json` (mode `0600`). No unofficial Whoop APIs.
+
+Required environment variables (see `.env.example`; `.env` is gitignored):
+
+| Variable | Purpose |
+|---|---|
+| `WHOOP_CLIENT_ID` | Client ID from the Whoop developer dashboard |
+| `WHOOP_CLIENT_SECRET` | Client secret. Never commit this |
+| `WHOOP_REDIRECT_URI` | Redirect saved on the Whoop app. Local default `http://localhost:8080/callback` |
+| `WHOOP_TIMEZONE` | Optional IANA zone for "today" / "yesterday" (else `TZ`, else `UTC`) |
+| `WHOOP_DATA_DIR` | Optional. Defaults to `~/.whoop-mcp` |
+
+Scopes requested: `read:recovery`, `read:sleep`, `read:cycles`, and `offline` (refresh token). Those cover recovery score, HRV, resting heart rate, sleep performance, and cycle strain. `log_intent` does not call Whoop.
 
 ## Evals
 
-See [`evals/cases.md`](evals/cases.md). v0 is not done until the fixture suite passes.
+See [`evals/cases.md`](evals/cases.md). Fixture translation: [`evals/fixtures/cases.json`](evals/fixtures/cases.json). `npm test` runs the 10 cases plus the drinks → explain → heavy-squat smoke path. It does not call Whoop.
 
 ## Example prompts
 
@@ -141,7 +153,66 @@ See [`evals/cases.md`](evals/cases.md). v0 is not done until the fixture suite p
 
 ## Install
 
-<!-- Fill after implementation -->
+Node 20+. Create an app at [developer.whoop.com](https://developer.whoop.com). On that app, add this Redirect URI and save:
+
+`http://localhost:8080/callback`
+
+Whoop compares it character for character. `localhost` and `127.0.0.1` do not match, and a trailing slash does not match. If the dashboard already has a different URI, put that exact value in `WHOOP_REDIRECT_URI` instead.
+
+```bash
+npm install
+npm run build
+cp .env.example .env   # fill WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET, WHOOP_REDIRECT_URI
+npm run auth           # browser login; tokens stay in ~/.whoop-mcp
+```
+
+If the browser says the `redirect_uri` is not a pre-registered redirect URL, the dashboard value and `WHOOP_REDIRECT_URI` still differ. `npm run auth` prints the URI it is sending.
+
+The stdio server is `node dist/index.js`. Put the same env vars on the MCP process (Cursor may not use the repo `.env` as its cwd). Run `npm run auth` once in a terminal before asking an agent for recovery data.
+
+### Claude Desktop
+
+`claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "whoop": {
+      "command": "node",
+      "args": ["/absolute/path/to/whoop-mcp/dist/index.js"],
+      "env": {
+        "WHOOP_CLIENT_ID": "your-client-id",
+        "WHOOP_CLIENT_SECRET": "your-client-secret",
+        "WHOOP_REDIRECT_URI": "http://localhost:8080/callback",
+        "WHOOP_TIMEZONE": "America/New_York"
+      }
+    }
+  }
+}
+```
+
+### Cursor
+
+`.cursor/mcp.json` in the project, or `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "whoop": {
+      "command": "node",
+      "args": ["/absolute/path/to/whoop-mcp/dist/index.js"],
+      "env": {
+        "WHOOP_CLIENT_ID": "your-client-id",
+        "WHOOP_CLIENT_SECRET": "your-client-secret",
+        "WHOOP_REDIRECT_URI": "http://localhost:8080/callback",
+        "WHOOP_TIMEZONE": "America/New_York"
+      }
+    }
+  }
+}
+```
+
+Do not commit real client secrets in either file.
 
 ## Demo
 
