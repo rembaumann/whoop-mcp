@@ -3,7 +3,7 @@ import { z } from "zod/v4";
 import type { CoachService } from "./logic/service.js";
 import { INTENT_TYPES, PLANNED_SESSIONS } from "./types.js";
 
-export const TOOL_NAMES = ["log_intent", "explain_yesterday", "today_training_call"] as const;
+export const TOOL_NAMES = ["log_intent", "explain_yesterday", "today_training_call", "get_steps"] as const;
 
 export function createServer(service: CoachService): McpServer {
   const server = new McpServer({ name: "whoop-mcp", version: "0.1.0" });
@@ -79,6 +79,34 @@ export function createServer(service: CoachService): McpServer {
     async (args) => {
       try {
         return toolJson(await service.todayTrainingCall(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_steps",
+    {
+      title: "Get steps",
+      description:
+        "Read WHOOP cycle step counts. Read-only GET /v2/cycle under the existing read:cycles scope. Does not write to Whoop and does not request a new scope. A cycle runs wake-to-wake, not midnight-to-midnight. current is the open cycle: coverage is partial and step_count is steps so far since start, updating during the day. recent lists completed cycle totals. step_count null or missing is not available, never zero, and those cycles are omitted from baseline_step_count. A numeric 0 is a real zero. The open cycle is not included in the baseline.",
+      inputSchema: z.object({
+        days: z
+          .number()
+          .int()
+          .min(1)
+          .max(30)
+          .optional()
+          .describe(
+            "How many local dates of completed cycles to include, ending today in WHOOP_TIMEZONE. Default 14. The open cycle is always returned separately as current.",
+          ),
+      }),
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async (args) => {
+      try {
+        return toolJson(await service.getSteps(args));
       } catch (err) {
         return toolError(err);
       }

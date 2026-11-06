@@ -14,7 +14,7 @@ Built for active people who use personal AI assistants and want more determinist
 
 | Stage | What's in | State |
 |---|---|---|
-| **v0 (current)** | Intent log, recovery in-band / debug, training call | v0 runnable (10/10 fixture evals) |
+| **v0 (current)** | Intent log, recovery in-band / debug, training call, read-only cycle step count | v0 runnable (10/10 fixture evals; step counts covered by unit tests) |
 | **v1 (planned)** | Reconcile workouts in Google Sheets/Drive with Whoop (catch missing strain) | Spec only |
 | **v2 (planned)** | Session effort vs expected (trainer days vs solo) | Spec only |
 | **Later** | Calendar load as context; smarter journal assists | Ideas |
@@ -24,6 +24,8 @@ Built for active people who use personal AI assistants and want more determinist
 - Not a thin 1:1 wrapper of every Whoop v2 endpoint
 - No medical **diagnosis** ("you are sick"). Hypothesis lists that include possible illness as one unchecked cause are OK
 - No reverse-engineered / unofficial Whoop write APIs
+- No writes to Whoop data (no POST, PUT, or DELETE of cycles, journal entries, or workouts)
+- No body-measurement reads (`read:body_measurement` is not requested)
 - No calendar sync yet
 - No replacing Whoop's journal UI end-to-end
 - No Sheets sync or trainer-vs-solo effort scoring yet (see Next)
@@ -108,6 +110,34 @@ Use the in-band / debug result to recommend today's session.
 - Relevant open niggle (e.g. knee + squat) → bias against loading that pattern
 - Always give a concrete alternate when the call is not `go`
 
+---
+
+### `get_steps`
+
+Read cycle step counts. Read-only. Does not change recovery or training calls.
+
+**Input**
+- `days` (optional integer 1–30, default 14): how many local dates of **completed** cycles to include, ending today in `WHOOP_TIMEZONE`
+
+**Data used**
+- `GET /v2/cycle` only (the collection this server already uses for strain). Each record's top-level `step_count` is the field WHOOP added on September 23, 2026. The [official Cycle schema](https://api.prod.whoop.com/developer/doc/openapi.json) types it as a nullable integer on the cycle, not inside `score`. `GET /v2/cycle/{cycleId}` returns the same record shape; this tool reads the collection.
+- Authorized by the existing `read:cycles` scope. No new scope and no reconnect.
+- A cycle runs wake-to-wake. Totals will not match a midnight-to-midnight pedometer. The open cycle has no `end`.
+
+**Output**
+- `current`: the open cycle. `coverage` is `partial`. `step_count_label` is `"<n> so far"` when steps exist, or `"not available"` when they do not. `start` is when that count began. `note` says the value updates during the day and is not a finished total. `current` itself is `null` when Whoop did not return an open cycle.
+- `recent`: completed cycles in the window, oldest first. `coverage` is `complete`. `date` is the local wake date of `end` (the cycle's `timezone_offset`).
+- `baseline_step_count`: mean of completed cycles in the window that have a numeric `step_count`.
+- `baseline_cycles_counted` / `baseline_cycles_omitted`: how many completed cycles were in that mean, and how many were left out.
+- `null_step_count`: the literal `not available`.
+- `missing`: request errors. An error is not a step count of 0.
+
+**Null vs zero**
+- JSON `null`, a missing `step_count`, or a non-number is **not available**. It is stored as `step_count: null` and `step_count_label: "not available"`. It is not coerced to 0 (`Number(null)` is 0; this server does not do that).
+- Those cycles are omitted from `baseline_step_count`. If every completed cycle is missing steps, the baseline is `null`, not 0.
+- The open cycle's partial count is not included in the baseline.
+- A numeric `0` is a real zero and is included in the baseline.
+
 ## Next (planned, not v0)
 
 ### v1 — Workout reconcile (Sheets ↔ Whoop)
@@ -139,7 +169,7 @@ Required environment variables (see `.env.example`; `.env` is gitignored):
 | `WHOOP_TIMEZONE` | Optional IANA zone for "today" / "yesterday" (else `TZ`, else `UTC`) |
 | `WHOOP_DATA_DIR` | Optional. Defaults to `~/.whoop-mcp` |
 
-Scopes requested: `read:recovery`, `read:sleep`, `read:cycles`, and `offline` (refresh token). Those cover recovery score, HRV, resting heart rate, sleep performance, and cycle strain. `log_intent` does not call Whoop.
+Scopes requested: `read:recovery`, `read:sleep`, `read:cycles`, and `offline` (refresh token). Those cover recovery score, HRV, resting heart rate, sleep performance, cycle strain, and cycle `step_count`. Step count uses `read:cycles`; do not add a scope and do not reconnect for it. `log_intent` does not call Whoop. No tool writes to Whoop.
 
 ## Evals
 
@@ -150,6 +180,7 @@ See [`evals/cases.md`](evals/cases.md). Fixture translation: [`evals/fixtures/ca
 - "I had drinks last night — log that."
 - "Was yesterday's recovery in band? If not, why?"
 - "Today is heavy squat Day 4. What should I do?"
+- "How many steps so far today, and what were the last few cycles?"
 
 ## Install
 
