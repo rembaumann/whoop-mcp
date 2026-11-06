@@ -10,12 +10,22 @@ import os from "node:os";
 import path from "node:path";
 import type { WhoopProvider } from "../src/types.js";
 
-test("stdio server registers exactly the three v0 tools", async () => {
-  assert.deepEqual([...TOOL_NAMES], ["log_intent", "explain_yesterday", "today_training_call"]);
+test("stdio server registers the coach tools", async () => {
+  assert.deepEqual([...TOOL_NAMES], ["log_intent", "explain_yesterday", "today_training_call", "get_steps"]);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whoop-server-"));
   const whoop: WhoopProvider = {
     async getDays() {
       return { days: [], errors: ["recovery: fixture"] };
+    },
+    async getSteps() {
+      return {
+        current: null,
+        recent: [],
+        baseline_step_count: null,
+        baseline_cycles_counted: 0,
+        baseline_cycles_omitted: 0,
+        errors: [],
+      };
     },
   };
   const service = new CoachService(

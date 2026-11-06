@@ -1,16 +1,22 @@
 import { addDays, isIsoDate, todayInZone } from "../dates.js";
 import { JsonIntentStore } from "../store/intents.js";
-import type {
-  Clock,
-  ExplainResult,
-  IntentType,
-  LogIntentResult,
-  PlannedSession,
-  TrainingResult,
-  WhoopProvider,
+import {
+  NULL_STEP_COUNT,
+  STEP_BASELINE_NOTE,
+  type Clock,
+  type ExplainResult,
+  type IntentType,
+  type LogIntentResult,
+  type PlannedSession,
+  type StepsResult,
+  type TrainingResult,
+  type WhoopProvider,
 } from "../types.js";
 import { explainDay } from "./explain.js";
 import { trainingCall } from "./training.js";
+
+const DEFAULT_STEP_DAYS = 14;
+const MAX_STEP_DAYS = 30;
 
 const INTENT_TYPES = new Set<IntentType>([
   "drinks",
@@ -107,5 +113,47 @@ export class CoachService {
       intents: this.store.list(),
       yesterday,
     });
+  }
+
+  /**
+   * Open-cycle steps so far, plus completed wake-to-wake totals.
+   * Null step counts stay null and are left out of the baseline.
+   */
+  async getSteps(input: { days?: number } = {}): Promise<StepsResult> {
+    const days = input.days ?? DEFAULT_STEP_DAYS;
+    if (!Number.isInteger(days) || days < 1 || days > MAX_STEP_DAYS) {
+      throw new Error(`days must be an integer from 1 to ${MAX_STEP_DAYS}.`);
+    }
+    const end = todayInZone(this.clock);
+    const start = addDays(end, 1 - days);
+    const window = { start, end, time_zone: this.clock.timeZone };
+    const blank = (missing: string[]): StepsResult => ({
+      window,
+      current: null,
+      recent: [],
+      baseline_step_count: null,
+      baseline_cycles_counted: 0,
+      baseline_cycles_omitted: 0,
+      baseline_note: STEP_BASELINE_NOTE,
+      null_step_count: NULL_STEP_COUNT,
+      missing,
+    });
+    try {
+      const read = await this.whoop.getSteps(start, end);
+      return {
+        window,
+        current: read.current,
+        recent: read.recent,
+        baseline_step_count: read.baseline_step_count,
+        baseline_cycles_counted: read.baseline_cycles_counted,
+        baseline_cycles_omitted: read.baseline_cycles_omitted,
+        baseline_note: STEP_BASELINE_NOTE,
+        null_step_count: NULL_STEP_COUNT,
+        missing: read.errors,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Whoop read failed";
+      return blank([message]);
+    }
   }
 }

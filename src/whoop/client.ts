@@ -1,8 +1,9 @@
 import { addDays } from "../dates.js";
 import type { AppConfig } from "../config.js";
-import type { WhoopProvider, WhoopReadResult } from "../types.js";
+import type { StepsReadResult, WhoopProvider, WhoopReadResult } from "../types.js";
 import { loadAccessToken } from "../auth/oauth.js";
 import { mapWhoopDays } from "./map.js";
+import { mapCycleSteps } from "./steps.js";
 import type { WhoopCollection, WhoopCycle, WhoopRecovery, WhoopSleep } from "./types.js";
 
 class WhoopHttpError extends Error {
@@ -17,7 +18,8 @@ class WhoopHttpError extends Error {
 
 /**
  * Official Whoop Developer API v2 client.
- * Reads recovery, sleep, and cycle collections. Does not post journal or intent data.
+ * Reads recovery, sleep, and cycle collections. Step counts come from GET /v2/cycle
+ * (the same collection as strain). Does not POST, PUT, or DELETE Whoop data.
  */
 export class WhoopClient implements WhoopProvider {
   private refreshing: Promise<string> | null = null;
@@ -35,8 +37,7 @@ export class WhoopClient implements WhoopProvider {
       return { days: [], errors: [errorMessage(err)] };
     }
 
-    const start = `${addDays(startDate, -1)}T00:00:00.000Z`;
-    const end = `${addDays(endDate, 2)}T00:00:00.000Z`;
+    const { start, end } = this.queryWindow(startDate, endDate);
     const errors: string[] = [];
     const [recoveries, sleeps, cycles] = await Promise.all([
       this.collect<WhoopRecovery>("/v2/recovery", start, end, token, errors, "recovery"),
@@ -52,6 +53,41 @@ export class WhoopClient implements WhoopProvider {
     }).filter((day) => day.date >= startDate && day.date <= endDate);
 
     return { days, errors };
+  }
+
+  /**
+   * Step counts for the open cycle and completed cycles in the date window.
+   * GET /v2/cycle only. `step_count` is the top-level cycle field; null stays null.
+   */
+  async getSteps(startDate: string, endDate: string): Promise<StepsReadResult> {
+    const empty = (errors: string[]): StepsReadResult => ({
+      current: null,
+      recent: [],
+      baseline_step_count: null,
+      baseline_cycles_counted: 0,
+      baseline_cycles_omitted: 0,
+      errors,
+    });
+
+    let token: string;
+    try {
+      token = await this.accessToken();
+    } catch (err) {
+      return empty([errorMessage(err)]);
+    }
+
+    const { start, end } = this.queryWindow(startDate, endDate);
+    const errors: string[] = [];
+    const cycles = await this.collect<WhoopCycle>("/v2/cycle", start, end, token, errors, "cycles");
+    return { ...mapCycleSteps({ cycles, startDate, endDate }), errors };
+  }
+
+  /** Inclusive local dates, padded so a cycle that crosses midnight UTC is still returned. */
+  private queryWindow(startDate: string, endDate: string): { start: string; end: string } {
+    return {
+      start: `${addDays(startDate, -1)}T00:00:00.000Z`,
+      end: `${addDays(endDate, 2)}T00:00:00.000Z`,
+    };
   }
 
   private async accessToken(force = false): Promise<string> {
