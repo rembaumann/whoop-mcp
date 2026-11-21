@@ -3,7 +3,7 @@
 Whoop Coach MCP (`whoop-mcp`) is a personal, single-user tool.
 
 ## What data is accessed
-With your explicit OAuth consent, the app may read Whoop data needed for coaching decisions, such as recovery, sleep, cycles/strain, and workouts.
+With your explicit OAuth consent, the app may read Whoop data needed for coaching decisions, such as recovery, sleep, cycles (strain and step count), and workouts.
 
 ## How data is used
 Data is used only on your machine to power local MCP tools (intent log, recovery in-band checks, training recommendations). It is not sold or used for advertising.

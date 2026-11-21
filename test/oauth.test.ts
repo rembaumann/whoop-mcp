@@ -37,7 +37,7 @@ test("authorize URL requests recovery, sleep, cycle, and offline scopes", () => 
   assert.equal(url.searchParams.get("redirect_uri"), app.redirectUri);
   assert.equal(url.searchParams.get("state"), state);
   const scope = url.searchParams.get("scope") ?? "";
-  for (const name of WHOOP_SCOPES) assert.ok(scope.split(" ").includes(name), name);
+  assert.equal(scope, WHOOP_SCOPES.join(" "));
   assert.equal(url.searchParams.get("client_secret"), null);
 });
 

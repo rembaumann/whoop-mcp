@@ -34,9 +34,55 @@ export interface WhoopReadResult {
   errors: string[];
 }
 
-/** Read-only Whoop access. v0 never writes lifestyle data back to Whoop. */
+/** Shown wherever a cycle has no numeric step_count. Never render that case as 0. */
+export const NULL_STEP_COUNT = "not available" as const;
+
+/** How baseline_step_count is computed. Kept on the tool payload so a null baseline is not read as zero. */
+export const STEP_BASELINE_NOTE =
+  "Mean of completed cycles in this window with a numeric step_count. Null and missing step counts are omitted, not treated as zero. The open cycle's partial count is not included.";
+
+/** One wake-to-wake cycle's steps. step_count null means Whoop had no step data. */
+export interface StepCycle {
+  cycle_id: number;
+  /** ISO start. For the open cycle this is when the so-far count began. */
+  start: string;
+  /** ISO end of a completed cycle. Null while the cycle is still open. */
+  end: string | null;
+  /** Local date of `end` for a completed cycle, or of `start` while the cycle is open. */
+  date: string;
+  step_count: number | null;
+  /** Number, "N so far" while open, or "not available". */
+  step_count_label: string;
+  /** "partial" is steps so far. "complete" is a finished cycle total. */
+  coverage: "partial" | "complete";
+  note: string;
+}
+
+export interface StepsReadResult {
+  current: StepCycle | null;
+  recent: StepCycle[];
+  baseline_step_count: number | null;
+  baseline_cycles_counted: number;
+  baseline_cycles_omitted: number;
+  errors: string[];
+}
+
+export interface StepsResult {
+  window: { start: string; end: string; time_zone: string };
+  current: StepCycle | null;
+  recent: StepCycle[];
+  baseline_step_count: number | null;
+  baseline_cycles_counted: number;
+  baseline_cycles_omitted: number;
+  baseline_note: string;
+  null_step_count: typeof NULL_STEP_COUNT;
+  missing: string[];
+}
+
+/** Read-only Whoop access. v0 never writes lifestyle data or step counts back to Whoop. */
 export interface WhoopProvider {
   getDays(startDate: string, endDate: string): Promise<WhoopReadResult>;
+  getSteps(startDate: string, endDate: string): Promise<StepsReadResult>;
 }
 
 export interface Clock {

@@ -65,6 +65,36 @@ test("maps scored recovery, sleep, and cycle strain onto the wake date", () => {
   assert.equal(days[0]?.strain, 5.2951527);
 });
 
+test("an open cycle step count is not turned into a scored day", () => {
+  const days = mapWhoopDays({
+    timeZone: "America/New_York",
+    recoveries: [],
+    sleeps: [],
+    cycles: [
+      {
+        id: 7,
+        start: "2026-11-05T11:00:00.000Z",
+        timezone_offset: "-05:00",
+        score_state: "PENDING_SCORE",
+        step_count: 4210,
+      },
+      {
+        id: 8,
+        start: "2026-11-04T11:00:00.000Z",
+        end: "2026-11-05T11:00:00.000Z",
+        timezone_offset: "-05:00",
+        score_state: "SCORED",
+        score: { strain: 9.5 },
+        step_count: null,
+      },
+    ],
+  });
+  assert.equal(days.length, 1);
+  assert.equal(days[0]?.date, "2026-11-05");
+  assert.equal(days[0]?.strain, 9.5);
+  assert.equal("step_count" in (days[0] ?? {}), false);
+});
+
 test("pending recovery is not turned into a score", () => {
   const days = mapWhoopDays({
     timeZone: "UTC",

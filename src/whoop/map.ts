@@ -50,6 +50,7 @@ export function mapWhoopDays(input: {
     if (row.sleep_performance == null) row.sleep_performance = sleep.score.sleep_performance_percentage;
   }
 
+  // Strain only. Step counts are mapped in steps.ts so a null step_count is never stored as 0.
   for (const cycle of input.cycles) {
     if (cycle.score_state !== "SCORED" || typeof cycle.score?.strain !== "number") continue;
     const when = cycle.end ?? cycle.start;

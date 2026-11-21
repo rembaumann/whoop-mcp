@@ -2,7 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-/** Scopes for recovery, sleep, and cycle/strain, plus offline so refresh tokens are issued. */
+/**
+ * Recovery, sleep, and cycles (strain and step_count), plus offline so refresh tokens are issued.
+ * Step count is part of read:cycles. Do not add a scope for it.
+ */
 export const WHOOP_SCOPES = ["read:recovery", "read:sleep", "read:cycles", "offline"] as const;
 
 export const WHOOP_AUTHORIZE_URL = "https://api.prod.whoop.com/oauth/oauth2/auth";

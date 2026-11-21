@@ -272,5 +272,16 @@ function trackingProvider(days: DayRecord[]): WhoopProvider & { calls: string[] 
         errors: [],
       };
     },
+    async getSteps() {
+      this.calls.push("getSteps");
+      return {
+        current: null,
+        recent: [],
+        baseline_step_count: null,
+        baseline_cycles_counted: 0,
+        baseline_cycles_omitted: 0,
+        errors: [],
+      };
+    },
   };
 }

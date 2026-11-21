@@ -26,12 +26,19 @@ export interface WhoopSleep {
 export interface WhoopCycle {
   id: number;
   start: string;
-  end?: string;
+  /** Absent while the member is still in this cycle. */
+  end?: string | null;
   timezone_offset: string;
   score_state: "SCORED" | "PENDING_SCORE" | "UNSCORABLE" | string;
   score?: {
     strain?: number;
   };
+  /**
+   * Steps for this wake-to-wake cycle. Top-level on the cycle record (not inside `score`).
+   * Null or omitted when Whoop has no step data. Never a stand-in for zero.
+   * On the open cycle this is steps so far.
+   */
+  step_count?: number | null;
 }
 
 export interface WhoopCollection<T> {
