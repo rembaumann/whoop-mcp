@@ -27,6 +27,9 @@ test("stdio server registers the coach tools", async () => {
         errors: [],
       };
     },
+    async getWorkouts() {
+      return { workouts: [], errors: [] };
+    },
   };
   const service = new CoachService(
     new JsonIntentStore(path.join(dir, "intents.json")),

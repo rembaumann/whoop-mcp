@@ -308,6 +308,9 @@ test("getSteps uses today in the configured timezone and does not call getDays",
         errors: [],
       };
     },
+    async getWorkouts() {
+      return { workouts: [], errors: [] };
+    },
   };
   const service = new CoachService(
     new JsonIntentStore(path.join(dir, "intents.json")),
@@ -368,6 +371,9 @@ test("get_steps tool returns the partial cycle and does not turn null into zero"
         baseline_cycles_omitted: 0,
         errors: [],
       };
+    },
+    async getWorkouts() {
+      return { workouts: [], errors: [] };
     },
   };
   const service = new CoachService(

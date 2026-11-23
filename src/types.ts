@@ -79,10 +79,52 @@ export interface StepsResult {
   missing: string[];
 }
 
-/** Read-only Whoop access. v0 never writes lifestyle data or step counts back to Whoop. */
+
+export interface WorkoutZoneDurations {
+  zone_zero_minutes: number | null;
+  zone_one_minutes: number | null;
+  zone_two_minutes: number | null;
+  zone_three_minutes: number | null;
+  zone_four_minutes: number | null;
+  zone_five_minutes: number | null;
+}
+
+/** One official Whoop workout. Null metrics mean Whoop did not send a number, not zero. */
+export interface WorkoutRecord {
+  id: string;
+  /** Local date of `start` using the workout's timezone_offset. */
+  date: string;
+  /** Local start, including the workout's timezone offset. */
+  start: string;
+  /** Local end, including the workout's timezone offset. */
+  end: string;
+  duration_minutes: number | null;
+  sport_name: string | null;
+  /** Null when Whoop omitted sport_id (removed from the public schema after 2025-09-01). */
+  sport_id: number | null;
+  score_state: string | null;
+  strain: number | null;
+  average_heart_rate: number | null;
+  max_heart_rate: number | null;
+  zone_durations: WorkoutZoneDurations | null;
+}
+
+export interface WorkoutsReadResult {
+  workouts: WorkoutRecord[];
+  errors: string[];
+}
+
+export interface WorkoutsResult {
+  window: { start: string; end: string; time_zone: string };
+  workouts: WorkoutRecord[];
+  missing: string[];
+}
+
+/** Read-only Whoop access. v0 never writes lifestyle data, step counts, or workouts back to Whoop. */
 export interface WhoopProvider {
   getDays(startDate: string, endDate: string): Promise<WhoopReadResult>;
   getSteps(startDate: string, endDate: string): Promise<StepsReadResult>;
+  getWorkouts(startDate: string, endDate: string): Promise<WorkoutsReadResult>;
 }
 
 export interface Clock {
