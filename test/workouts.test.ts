@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
-import { writeTokens } from "../src/auth/tokens.js";
+import { readTokens, writeTokens } from "../src/auth/tokens.js";
 import type { AppConfig } from "../src/config.js";
 import { fixedClock } from "../src/dates.js";
 import { CoachService } from "../src/logic/service.js";
@@ -431,6 +431,73 @@ test("get_workouts tool is read-only and returns mapped sessions", async () => {
   assert.equal(called.structuredContent?.workouts[0]?.duration_minutes, 25);
   assert.equal(called.structuredContent?.workouts[0]?.strain, 6.5);
   await server.close();
+});
+
+
+test("getWorkouts retries once after HTTP 401 using a forced official token refresh", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whoop-workouts-401-"));
+  const app = config(dir);
+  writeTokens(app.tokenPath, {
+    access_token: "access-123",
+    refresh_token: "refresh-456",
+    expires_at: Date.now() + 3_600_000,
+    token_type: "bearer",
+    scope: "read:workout offline",
+  });
+  const calls: Array<{ method: string; pathname: string; auth: string | null }> = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = new URL(String(input));
+    const method = init?.method ?? "GET";
+    const auth = new Headers(init?.headers).get("authorization");
+    calls.push({ method, pathname: url.pathname, auth });
+    if (url.pathname === "/oauth/oauth2/token") {
+      assert.equal(method, "POST");
+      assert.equal(url.host, "api.prod.whoop.com");
+      return new Response(
+        JSON.stringify({
+          access_token: "fresh-access",
+          refresh_token: "refresh-789",
+          expires_in: 3600,
+          token_type: "bearer",
+          scope: "read:workout offline",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    assert.equal(method, "GET");
+    assert.equal(url.pathname, "/developer/v2/activity/workout");
+    if (auth === "Bearer access-123") {
+      return new Response("expired", { status: 401 });
+    }
+    assert.equal(auth, "Bearer fresh-access");
+    return new Response(
+      JSON.stringify({
+        records: [
+          workout({
+            id: "one",
+            start: "2026-11-17T15:00:00.000Z",
+            end: "2026-11-17T15:30:00.000Z",
+            sport_name: "Stairmaster",
+            score: { strain: 6.5, average_heart_rate: 128, max_heart_rate: 148 },
+          }),
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  };
+  const result = await new WhoopClient(app, fetchImpl).getWorkouts("2026-11-16", "2026-11-22");
+  assert.deepEqual(
+    calls.map((call) => `${call.method} ${call.pathname}`),
+    [
+      "GET /developer/v2/activity/workout",
+      "POST /oauth/oauth2/token",
+      "GET /developer/v2/activity/workout",
+    ],
+  );
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.workouts[0]?.sport_name, "Stairmaster");
+  assert.equal(readTokens(app.tokenPath)?.access_token, "fresh-access");
+  assert.equal(fs.existsSync(app.intentPath), false);
 });
 
 function workout(partial: Partial<WhoopWorkout> & Pick<WhoopWorkout, "id" | "start" | "end">): WhoopWorkout {
