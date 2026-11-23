@@ -14,7 +14,7 @@ Built for active people who use personal AI assistants and want more determinist
 
 | Stage | What's in | State |
 |---|---|---|
-| **v0 (current)** | Intent log, recovery in-band / debug, training call, read-only cycle step count | v0 runnable (10/10 fixture evals; step counts covered by unit tests) |
+| **v0 (current)** | Intent log, recovery in-band / debug, training call, read-only cycle step count, read-only workouts | v0 runnable (10/10 fixture evals; step counts and workouts covered by unit tests) |
 | **v1 (planned)** | Reconcile workouts in Google Sheets/Drive with Whoop (catch missing strain) | Spec only |
 | **v2 (planned)** | Session effort vs expected (trainer days vs solo) | Spec only |
 | **Later** | Calendar load as context; smarter journal assists | Ideas |
@@ -138,6 +138,31 @@ Read cycle step counts. Read-only. Does not change recovery or training calls.
 - The open cycle's partial count is not included in the baseline.
 - A numeric `0` is a real zero and is included in the baseline.
 
+---
+
+### `get_workouts`
+
+Read recorded workout sessions. Read-only. Does not change recovery or training calls.
+
+**Input**
+- `start` (optional YYYY-MM-DD): inclusive start date in `WHOOP_TIMEZONE`. Defaults to 6 days before `end` (7 local days total).
+- `end` (optional YYYY-MM-DD): inclusive end date in `WHOOP_TIMEZONE`. Defaults to today.
+
+**Data used**
+- `GET /v2/activity/workout` only, following `next_token` pagination. The [official WorkoutV2 schema](https://api.prod.whoop.com/developer/doc/openapi.json) includes `sport_name`, `start`, `end`, `timezone_offset`, `score_state`, and a `score` object with strain, heart rate, and `zone_durations`.
+- Authorized by `read:workout`. If an existing token was issued before this scope was requested, run `npm run auth` again. This server does not refresh a token into a new scope.
+- `sport_id` was removed from the public schema after 2025-09-01. The tool returns it only when Whoop still sends a number. It is not inferred from `sport_name`.
+
+**Output**
+- `window`: the inclusive local start and end dates and `WHOOP_TIMEZONE`.
+- `workouts`: sessions whose start falls in that window, oldest first. Each has local `start` and `end` (using the workout's `timezone_offset`), `date`, `duration_minutes`, `sport_name`, `sport_id`, `score_state`, `strain`, `average_heart_rate`, `max_heart_rate`, and `zone_durations` in minutes when scored.
+- `missing`: request errors. An error is not an empty week of training.
+
+**Null vs zero**
+- Missing or non-numeric strain, heart rate, or zone fields stay `null`. They are not coerced to 0.
+- Unscored workouts (`PENDING_SCORE` or `UNSCORABLE`) are returned with null metrics and their `score_state`. A pending score is not treated as a finished strain value.
+- A numeric `0` (for example zero minutes in a heart-rate zone) is a real zero.
+
 ## Next (planned, not v0)
 
 ### v1 — Workout reconcile (Sheets ↔ Whoop)
@@ -169,7 +194,7 @@ Required environment variables (see `.env.example`; `.env` is gitignored):
 | `WHOOP_TIMEZONE` | Optional IANA zone for "today" / "yesterday" (else `TZ`, else `UTC`) |
 | `WHOOP_DATA_DIR` | Optional. Defaults to `~/.whoop-mcp` |
 
-Scopes requested: `read:recovery`, `read:sleep`, `read:cycles`, and `offline` (refresh token). Those cover recovery score, HRV, resting heart rate, sleep performance, cycle strain, and cycle `step_count`. Step count uses `read:cycles`; do not add a scope and do not reconnect for it. `log_intent` does not call Whoop. No tool writes to Whoop.
+Scopes requested: `read:recovery`, `read:sleep`, `read:cycles`, `read:workout`, and `offline` (refresh token). Those cover recovery score, HRV, resting heart rate, sleep performance, cycle strain, cycle `step_count`, and recorded workouts. Step count uses `read:cycles` and does not need a reconnect. `get_workouts` needs `read:workout`; run `npm run auth` again if the stored token was issued without that scope. `log_intent` does not call Whoop. No tool writes to Whoop.
 
 ## Evals
 
@@ -181,6 +206,7 @@ See [`evals/cases.md`](evals/cases.md). Fixture translation: [`evals/fixtures/ca
 - "Was yesterday's recovery in band? If not, why?"
 - "Today is heavy squat Day 4. What should I do?"
 - "How many steps so far today, and what were the last few cycles?"
+- "What workouts did Whoop record this week? Did I hit the StairMaster?"
 
 ## Install
 
