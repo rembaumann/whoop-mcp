@@ -1,10 +1,11 @@
 import { addDays, startOfLocalDayUtc } from "../dates.js";
 import type { AppConfig } from "../config.js";
-import type { StepsReadResult, WhoopProvider, WhoopReadResult, WorkoutsReadResult } from "../types.js";
+import type { LastWakeTimeReadResult, StepsReadResult, WhoopProvider, WhoopReadResult, WorkoutsReadResult } from "../types.js";
 import { loadAccessToken } from "../auth/oauth.js";
 import { mapWhoopDays } from "./map.js";
 import { mapCycleSteps } from "./steps.js";
 import type { WhoopCollection, WhoopCycle, WhoopRecovery, WhoopSleep, WhoopWorkout } from "./types.js";
+import { mapLastWakeTime } from "./sleep.js";
 import { mapWorkouts } from "./workouts.js";
 
 class WhoopHttpError extends Error {
@@ -21,6 +22,7 @@ class WhoopHttpError extends Error {
  * Official Whoop Developer API v2 client.
  * Reads recovery, sleep, cycle, and workout collections. Step counts come from GET /v2/cycle
  * (the same collection as strain). Workouts come from GET /v2/activity/workout.
+ * Last wake time comes from GET /v2/activity/sleep?limit=5.
  * Does not POST, PUT, or DELETE Whoop data.
  */
 export class WhoopClient implements WhoopProvider {
@@ -110,6 +112,60 @@ export class WhoopClient implements WhoopProvider {
       }),
       errors,
     };
+  }
+
+
+  /**
+   * Most recent sleeps via a single official GET /v2/activity/sleep?limit=5.
+   * No start/end window. Does not write to Whoop. Requires read:sleep.
+   */
+  async getLastWakeTime(today: string): Promise<LastWakeTimeReadResult> {
+    const empty = (errors: string[]): LastWakeTimeReadResult => ({
+      sleep: null,
+      awake_now: false,
+      errors,
+    });
+
+    let token: string;
+    try {
+      token = await this.accessToken();
+    } catch (err) {
+      return empty([errorMessage(err)]);
+    }
+
+    const errors: string[] = [];
+    try {
+      const records = await this.recentSleeps(token);
+      return { ...mapLastWakeTime({ sleeps: records, today }), errors };
+    } catch (err) {
+      if (err instanceof WhoopHttpError && err.status === 401) {
+        try {
+          const refreshed = await this.accessToken(true);
+          const records = await this.recentSleeps(refreshed);
+          return { ...mapLastWakeTime({ sleeps: records, today }), errors };
+        } catch (retryErr) {
+          return empty([`sleep: ${errorMessage(retryErr)}`]);
+        }
+      }
+      return empty([errorMessage(err)]);
+    }
+  }
+
+  /** Official collection of the latest sleeps. limit=5 only; no start or end. */
+  private async recentSleeps(token: string): Promise<WhoopSleep[]> {
+    const url = new URL(`${this.config.apiBase}/v2/activity/sleep`);
+    url.searchParams.set("limit", "5");
+    const response = await this.fetchImpl(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "User-Agent": "whoop-mcp/0.1.0",
+      },
+    });
+    if (!response.ok) throw new WhoopHttpError(response.status, "sleep");
+    const body = (await response.json()) as WhoopCollection<WhoopSleep>;
+    return Array.isArray(body.records) ? body.records : [];
   }
 
   /** Inclusive local dates, padded so a cycle that crosses midnight UTC is still returned. */

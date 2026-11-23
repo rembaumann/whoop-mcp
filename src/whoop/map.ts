@@ -46,6 +46,7 @@ export function mapWhoopDays(input: {
   for (const sleep of input.sleeps) {
     if (sleep.nap || sleep.score_state !== "SCORED") continue;
     if (typeof sleep.score?.sleep_performance_percentage !== "number") continue;
+    if (!sleep.end) continue;
     const row = bucket(localDateFromOffset(sleep.end, sleep.timezone_offset));
     if (row.sleep_performance == null) row.sleep_performance = sleep.score.sleep_performance_percentage;
   }
@@ -67,7 +68,7 @@ function recoveryDate(
   cycle: WhoopCycle | undefined,
   timeZone: string,
 ): string {
-  if (sleep && !sleep.nap) return localDateFromOffset(sleep.end, sleep.timezone_offset);
+  if (sleep && !sleep.nap && sleep.end) return localDateFromOffset(sleep.end, sleep.timezone_offset);
   if (cycle?.end) return localDateFromOffset(cycle.end, cycle.timezone_offset);
   if (cycle) return localDateFromOffset(cycle.start, cycle.timezone_offset);
   return formatInZone(new Date(recovery.created_at), timeZone);
