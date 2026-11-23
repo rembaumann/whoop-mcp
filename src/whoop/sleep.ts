@@ -69,7 +69,7 @@ function toSleep(raw: WhoopSleep): LastWakeTimeSleep | null {
  * local date (from timezone_offset) is `today`.
  */
 export function mapLastWakeTime(input: { sleeps: WhoopSleep[]; today: string }): Omit<LastWakeTimeReadResult, "errors"> {
-  const ranked = [...input.sleeps].filter((sleep) => typeof sleep?.start === "string").sort(compareRecency);
+  const ranked = [...input.sleeps].filter((sleep) => typeof sleep?.start === "string" && sleep.start.length > 0).sort(compareRecency);
   const latest = ranked[0];
   const nonNap = ranked.find((sleep) => !isNap(sleep));
   let awake_now = false;
