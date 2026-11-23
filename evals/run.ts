@@ -283,5 +283,9 @@ function trackingProvider(days: DayRecord[]): WhoopProvider & { calls: string[] 
         errors: [],
       };
     },
+    async getWorkouts() {
+      this.calls.push("getWorkouts");
+      return { workouts: [], errors: [] };
+    },
   };
 }

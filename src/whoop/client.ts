@@ -1,10 +1,11 @@
-import { addDays } from "../dates.js";
+import { addDays, startOfLocalDayUtc } from "../dates.js";
 import type { AppConfig } from "../config.js";
-import type { StepsReadResult, WhoopProvider, WhoopReadResult } from "../types.js";
+import type { StepsReadResult, WhoopProvider, WhoopReadResult, WorkoutsReadResult } from "../types.js";
 import { loadAccessToken } from "../auth/oauth.js";
 import { mapWhoopDays } from "./map.js";
 import { mapCycleSteps } from "./steps.js";
-import type { WhoopCollection, WhoopCycle, WhoopRecovery, WhoopSleep } from "./types.js";
+import type { WhoopCollection, WhoopCycle, WhoopRecovery, WhoopSleep, WhoopWorkout } from "./types.js";
+import { mapWorkouts } from "./workouts.js";
 
 class WhoopHttpError extends Error {
   constructor(
@@ -18,8 +19,9 @@ class WhoopHttpError extends Error {
 
 /**
  * Official Whoop Developer API v2 client.
- * Reads recovery, sleep, and cycle collections. Step counts come from GET /v2/cycle
- * (the same collection as strain). Does not POST, PUT, or DELETE Whoop data.
+ * Reads recovery, sleep, cycle, and workout collections. Step counts come from GET /v2/cycle
+ * (the same collection as strain). Workouts come from GET /v2/activity/workout.
+ * Does not POST, PUT, or DELETE Whoop data.
  */
 export class WhoopClient implements WhoopProvider {
   private refreshing: Promise<string> | null = null;
@@ -80,6 +82,34 @@ export class WhoopClient implements WhoopProvider {
     const errors: string[] = [];
     const cycles = await this.collect<WhoopCycle>("/v2/cycle", start, end, token, errors, "cycles");
     return { ...mapCycleSteps({ cycles, startDate, endDate }), errors };
+  }
+
+
+  /**
+   * Workouts whose start falls in the inclusive local date window.
+   * GET /v2/activity/workout only. Requires the read:workout scope.
+   */
+  async getWorkouts(startDate: string, endDate: string): Promise<WorkoutsReadResult> {
+    let token: string;
+    try {
+      token = await this.accessToken();
+    } catch (err) {
+      return { workouts: [], errors: [errorMessage(err)] };
+    }
+
+    const start = startOfLocalDayUtc(addDays(startDate, -1), this.config.timeZone);
+    const end = startOfLocalDayUtc(addDays(endDate, 2), this.config.timeZone);
+    const errors: string[] = [];
+    const records = await this.collect<WhoopWorkout>("/v2/activity/workout", start, end, token, errors, "workouts");
+    return {
+      ...mapWorkouts({
+        workouts: records,
+        startDate,
+        endDate,
+        timeZone: this.config.timeZone,
+      }),
+      errors,
+    };
   }
 
   /** Inclusive local dates, padded so a cycle that crosses midnight UTC is still returned. */

@@ -27,7 +27,7 @@ test("redirect URI normalization drops a trailing slash and keeps the host", () 
   assert.notEqual(normalizeRedirectUri("http://localhost:8080/callback"), normalizeRedirectUri("http://127.0.0.1:8080/callback"));
 });
 
-test("authorize URL requests recovery, sleep, cycle, and offline scopes", () => {
+test("authorize URL requests recovery, sleep, cycle, workout, and offline scopes", () => {
   const app = config(fs.mkdtempSync(path.join(os.tmpdir(), "whoop-oauth-")));
   const state = randomState();
   assert.equal(state.length, 8);
@@ -38,6 +38,7 @@ test("authorize URL requests recovery, sleep, cycle, and offline scopes", () => 
   assert.equal(url.searchParams.get("state"), state);
   const scope = url.searchParams.get("scope") ?? "";
   assert.equal(scope, WHOOP_SCOPES.join(" "));
+  assert.equal(scope.includes("read:workout"), true);
   assert.equal(url.searchParams.get("client_secret"), null);
 });
 

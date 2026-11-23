@@ -3,10 +3,10 @@ import os from "node:os";
 import path from "node:path";
 
 /**
- * Recovery, sleep, and cycles (strain and step_count), plus offline so refresh tokens are issued.
- * Step count is part of read:cycles. Do not add a scope for it.
+ * Recovery, sleep, cycles (strain and step_count), workouts, plus offline so refresh tokens are issued.
+ * Step count is part of read:cycles. Workouts require read:workout; existing tokens need a reconnect.
  */
-export const WHOOP_SCOPES = ["read:recovery", "read:sleep", "read:cycles", "offline"] as const;
+export const WHOOP_SCOPES = ["read:recovery", "read:sleep", "read:cycles", "read:workout", "offline"] as const;
 
 export const WHOOP_AUTHORIZE_URL = "https://api.prod.whoop.com/oauth/oauth2/auth";
 export const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
