@@ -11,7 +11,7 @@ import path from "node:path";
 import type { WhoopProvider } from "../src/types.js";
 
 test("stdio server registers the coach tools", async () => {
-  assert.deepEqual([...TOOL_NAMES], ["log_intent", "explain_yesterday", "today_training_call", "get_steps", "get_workouts"]);
+  assert.deepEqual([...TOOL_NAMES], ["log_intent", "explain_yesterday", "today_training_call", "get_steps", "get_workouts", "last_wake_time"]);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whoop-server-"));
   const whoop: WhoopProvider = {
     async getDays() {
@@ -30,6 +30,10 @@ test("stdio server registers the coach tools", async () => {
     async getWorkouts() {
       return { workouts: [], errors: [] };
     },
+    async getLastWakeTime() {
+      return { sleep: null, awake_now: false, errors: [] };
+    },
+
   };
   const service = new CoachService(
     new JsonIntentStore(path.join(dir, "intents.json")),

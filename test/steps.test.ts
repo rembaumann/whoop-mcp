@@ -311,6 +311,10 @@ test("getSteps uses today in the configured timezone and does not call getDays",
     async getWorkouts() {
       return { workouts: [], errors: [] };
     },
+    async getLastWakeTime() {
+      return { sleep: null, awake_now: false, errors: [] };
+    },
+
   };
   const service = new CoachService(
     new JsonIntentStore(path.join(dir, "intents.json")),
@@ -375,6 +379,10 @@ test("get_steps tool returns the partial cycle and does not turn null into zero"
     async getWorkouts() {
       return { workouts: [], errors: [] };
     },
+    async getLastWakeTime() {
+      return { sleep: null, awake_now: false, errors: [] };
+    },
+
   };
   const service = new CoachService(
     new JsonIntentStore(path.join(dir, "intents.json")),

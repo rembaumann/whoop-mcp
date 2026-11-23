@@ -3,7 +3,7 @@ import { z } from "zod/v4";
 import type { CoachService } from "./logic/service.js";
 import { INTENT_TYPES, PLANNED_SESSIONS } from "./types.js";
 
-export const TOOL_NAMES = ["log_intent", "explain_yesterday", "today_training_call", "get_steps", "get_workouts"] as const;
+export const TOOL_NAMES = ["log_intent", "explain_yesterday", "today_training_call", "get_steps", "get_workouts", "last_wake_time"] as const;
 
 export function createServer(service: CoachService): McpServer {
   const server = new McpServer({ name: "whoop-mcp", version: "0.1.0" });
@@ -137,6 +137,25 @@ export function createServer(service: CoachService): McpServer {
     async (args) => {
       try {
         return toolJson(await service.getWorkouts(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    },
+  );
+
+
+  server.registerTool(
+    "last_wake_time",
+    {
+      title: "Last wake time",
+      description:
+        "Read the most recent non-nap WHOOP sleep. Returns local start and end (wake time) converted with the sleep's timezone_offset, score_state, and awake_now. awake_now is true when the latest sleep (naps included) has an end whose local date is today in WHOOP_TIMEZONE. Read-only GET /v2/activity/sleep?limit=5 under the existing read:sleep scope. Does not write to Whoop.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async () => {
+      try {
+        return toolJson(await service.lastWakeTime());
       } catch (err) {
         return toolError(err);
       }

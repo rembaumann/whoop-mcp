@@ -14,7 +14,7 @@ Built for active people who use personal AI assistants and want more determinist
 
 | Stage | What's in | State |
 |---|---|---|
-| **v0 (current)** | Intent log, recovery in-band / debug, training call, read-only cycle step count, read-only workouts | v0 runnable (10/10 fixture evals; step counts and workouts covered by unit tests) |
+| **v0 (current)** | Intent log, recovery in-band / debug, training call, read-only cycle step count, read-only workouts, read-only last wake time | v0 runnable (10/10 fixture evals; step counts, workouts, and last wake time covered by unit tests) |
 | **v1 (planned)** | Reconcile workouts in Google Sheets/Drive with Whoop (catch missing strain) | Spec only |
 | **v2 (planned)** | Session effort vs expected (trainer days vs solo) | Spec only |
 | **Later** | Calendar load as context; smarter journal assists | Ideas |
@@ -163,6 +163,31 @@ Read recorded workout sessions. Read-only. Does not change recovery or training 
 - Unscored workouts (`PENDING_SCORE` or `UNSCORABLE`) are returned with null metrics and their `score_state`. A pending score is not treated as a finished strain value.
 - A numeric `0` (for example zero minutes in a heart-rate zone) is a real zero.
 
+
+---
+
+### `last_wake_time`
+
+Read the most recent overnight (non-nap) sleep and whether the member is awake now. Read-only. Does not change recovery or training calls.
+
+**Input**
+- None. "Today" is the current date in `WHOOP_TIMEZONE`.
+
+**Data used**
+- A single `GET /v2/activity/sleep?limit=5` on the official developer API. No `start`/`end` window and no unofficial Whoop APIs.
+- Authorized by the existing `read:sleep` scope. No new scope and no reconnect.
+- `nap: true` records are skipped when choosing the sleep to return. `awake_now` still looks at the latest sleep of any kind, including naps.
+
+**Output**
+- `start` / `end`: local wall times converted from the official UTC timestamps using the sleep's `timezone_offset` (for example `-05:00` in America/New_York standard time). `end` is the wake time. It is `null` while that sleep has no end (still asleep).
+- `score_state`: Whoop's score state, or `null` if missing.
+- `awake_now`: `true` when the latest sleep (naps included) has an `end` whose local date (from `timezone_offset`) is today in `WHOOP_TIMEZONE`.
+- `wake_date`: the local date of `end`, or `null`.
+- `time_zone`: `WHOOP_TIMEZONE`.
+- `missing`: request errors, or a note when no non-nap sleep was in the last 5 records.
+
+---
+
 ## Next (planned, not v0)
 
 ### v1 — Workout reconcile (Sheets ↔ Whoop)
@@ -194,7 +219,7 @@ Required environment variables (see `.env.example`; `.env` is gitignored):
 | `WHOOP_TIMEZONE` | Optional IANA zone for "today" / "yesterday" (else `TZ`, else `UTC`) |
 | `WHOOP_DATA_DIR` | Optional. Defaults to `~/.whoop-mcp` |
 
-Scopes requested: `read:recovery`, `read:sleep`, `read:cycles`, `read:workout`, and `offline` (refresh token). Those cover recovery score, HRV, resting heart rate, sleep performance, cycle strain, cycle `step_count`, and recorded workouts. Step count uses `read:cycles` and does not need a reconnect. `get_workouts` needs `read:workout`; run `npm run auth` again if the stored token was issued without that scope. `log_intent` does not call Whoop. No tool writes to Whoop.
+Scopes requested: `read:recovery`, `read:sleep`, `read:cycles`, `read:workout`, and `offline` (refresh token). Those cover recovery score, HRV, resting heart rate, sleep performance, cycle strain, cycle `step_count`, and recorded workouts. Step count uses `read:cycles` and does not need a reconnect. `last_wake_time` uses `read:sleep` and does not need a reconnect. `get_workouts` needs `read:workout`; run `npm run auth` again if the stored token was issued without that scope. `log_intent` does not call Whoop. No tool writes to Whoop.
 
 ## Evals
 
@@ -207,6 +232,7 @@ See [`evals/cases.md`](evals/cases.md). Fixture translation: [`evals/fixtures/ca
 - "Today is heavy squat Day 4. What should I do?"
 - "How many steps so far today, and what were the last few cycles?"
 - "What workouts did Whoop record this week? Did I hit the StairMaster?"
+- "What time did I wake up, and am I awake now?"
 
 ## Install
 

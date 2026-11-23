@@ -120,11 +120,40 @@ export interface WorkoutsResult {
   missing: string[];
 }
 
-/** Read-only Whoop access. v0 never writes lifestyle data, step counts, or workouts back to Whoop. */
+/** One overnight (non-nap) sleep. start/end are local wall times using the record's timezone_offset. */
+export interface LastWakeTimeSleep {
+  start: string;
+  /** Wake time. Null while this sleep has no end (still asleep). */
+  end: string | null;
+  score_state: string | null;
+  /** Local date of `end` using timezone_offset. Null when end is missing. */
+  wake_date: string | null;
+  timezone_offset: string;
+}
+
+export interface LastWakeTimeReadResult {
+  sleep: LastWakeTimeSleep | null;
+  /** True when the latest sleep (naps included) has an end whose local date is today. */
+  awake_now: boolean;
+  errors: string[];
+}
+
+export interface LastWakeTimeResult {
+  start: string | null;
+  end: string | null;
+  score_state: string | null;
+  awake_now: boolean;
+  wake_date: string | null;
+  time_zone: string;
+  missing: string[];
+}
+
+/** Read-only Whoop access. v0 never writes lifestyle data, step counts, workouts, or sleep back to Whoop. */
 export interface WhoopProvider {
   getDays(startDate: string, endDate: string): Promise<WhoopReadResult>;
   getSteps(startDate: string, endDate: string): Promise<StepsReadResult>;
   getWorkouts(startDate: string, endDate: string): Promise<WorkoutsReadResult>;
+  getLastWakeTime(today: string): Promise<LastWakeTimeReadResult>;
 }
 
 export interface Clock {

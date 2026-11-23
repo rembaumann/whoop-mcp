@@ -14,7 +14,8 @@ export interface WhoopSleep {
   id: string;
   cycle_id?: number;
   start: string;
-  end: string;
+  /** Absent or null while the member is still asleep. */
+  end?: string | null;
   timezone_offset: string;
   nap?: boolean;
   score_state: "SCORED" | "PENDING_SCORE" | "UNSCORABLE" | string;
