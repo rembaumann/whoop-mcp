@@ -3,7 +3,7 @@ import { z } from "zod/v4";
 import type { CoachService } from "./logic/service.js";
 import { INTENT_TYPES, PLANNED_SESSIONS } from "./types.js";
 
-export const TOOL_NAMES = ["log_intent", "explain_yesterday", "today_training_call", "get_steps"] as const;
+export const TOOL_NAMES = ["log_intent", "explain_yesterday", "today_training_call", "get_steps", "get_workouts"] as const;
 
 export function createServer(service: CoachService): McpServer {
   const server = new McpServer({ name: "whoop-mcp", version: "0.1.0" });
@@ -107,6 +107,36 @@ export function createServer(service: CoachService): McpServer {
     async (args) => {
       try {
         return toolJson(await service.getSteps(args));
+      } catch (err) {
+        return toolError(err);
+      }
+    },
+  );
+
+
+  server.registerTool(
+    "get_workouts",
+    {
+      title: "Get workouts",
+      description:
+        "Read WHOOP workout sessions. Read-only GET /v2/activity/workout under the read:workout scope. Does not write to Whoop. start and end are inclusive YYYY-MM-DD dates in WHOOP_TIMEZONE; if omitted, the last 7 local days ending today are used. Each workout includes local start and end, duration in minutes, sport_name, sport_id when Whoop still sends it (otherwise null — it is not inferred), strain, average and max heart rate, and zone durations in minutes when scored. Missing or non-numeric metrics stay null, never zero. Unscored workouts are returned with null metrics and their score_state.",
+      inputSchema: z.object({
+        start: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe("Inclusive start date YYYY-MM-DD in WHOOP_TIMEZONE. Defaults to 6 days before end (7 days total)."),
+        end: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe("Inclusive end date YYYY-MM-DD in WHOOP_TIMEZONE. Defaults to today."),
+      }),
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async (args) => {
+      try {
+        return toolJson(await service.getWorkouts(args));
       } catch (err) {
         return toolError(err);
       }

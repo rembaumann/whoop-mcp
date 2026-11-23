@@ -11,6 +11,7 @@ import {
   type StepsResult,
   type TrainingResult,
   type WhoopProvider,
+  type WorkoutsResult,
 } from "../types.js";
 import { explainDay } from "./explain.js";
 import { trainingCall } from "./training.js";
@@ -154,6 +155,27 @@ export class CoachService {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Whoop read failed";
       return blank([message]);
+    }
+  }
+  /**
+   * Official workouts in an inclusive local date window (default: last 7 days).
+   * GET /v2/activity/workout only. Does not write to Whoop.
+   */
+  async getWorkouts(input: { start?: string; end?: string } = {}): Promise<WorkoutsResult> {
+    const today = todayInZone(this.clock);
+    const end = input.end ?? today;
+    const start = input.start ?? addDays(end, -6);
+    if (!isIsoDate(start) || !isIsoDate(end)) throw new Error("start and end must be YYYY-MM-DD.");
+    if (start > end) throw new Error("start must be on or before end.");
+    const span = (Date.parse(`${end}T00:00:00.000Z`) - Date.parse(`${start}T00:00:00.000Z`)) / 86_400_000 + 1;
+    if (span > 90) throw new Error("The date range cannot exceed 90 days.");
+    const window = { start, end, time_zone: this.clock.timeZone };
+    try {
+      const read = await this.whoop.getWorkouts(start, end);
+      return { window, workouts: read.workouts, missing: read.errors };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Whoop read failed";
+      return { window, workouts: [], missing: [message] };
     }
   }
 }

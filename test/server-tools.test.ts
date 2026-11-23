@@ -11,7 +11,7 @@ import path from "node:path";
 import type { WhoopProvider } from "../src/types.js";
 
 test("stdio server registers the coach tools", async () => {
-  assert.deepEqual([...TOOL_NAMES], ["log_intent", "explain_yesterday", "today_training_call", "get_steps"]);
+  assert.deepEqual([...TOOL_NAMES], ["log_intent", "explain_yesterday", "today_training_call", "get_steps", "get_workouts"]);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whoop-server-"));
   const whoop: WhoopProvider = {
     async getDays() {
