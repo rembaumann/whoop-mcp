@@ -6,6 +6,7 @@ import {
   type Clock,
   type ExplainResult,
   type IntentType,
+  type LastWakeTimeResult,
   type LogIntentResult,
   type PlannedSession,
   type StepsResult,
@@ -176,6 +177,43 @@ export class CoachService {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Whoop read failed";
       return { window, workouts: [], missing: [message] };
+    }
+  }
+
+  /**
+   * Most recent non-nap sleep start/end and whether the member is awake now.
+   * GET /v2/activity/sleep?limit=5 only. Does not write to Whoop.
+   */
+  async lastWakeTime(): Promise<LastWakeTimeResult> {
+    const today = todayInZone(this.clock);
+    const time_zone = this.clock.timeZone;
+    const blank = (missing: string[]): LastWakeTimeResult => ({
+      start: null,
+      end: null,
+      score_state: null,
+      awake_now: false,
+      wake_date: null,
+      time_zone,
+      missing,
+    });
+    try {
+      const read = await this.whoop.getLastWakeTime(today);
+      const missing = [...read.errors];
+      if (!read.sleep && missing.length === 0) {
+        missing.push("No non-nap sleep in the last 5 records.");
+      }
+      return {
+        start: read.sleep?.start ?? null,
+        end: read.sleep?.end ?? null,
+        score_state: read.sleep?.score_state ?? null,
+        awake_now: read.awake_now,
+        wake_date: read.sleep?.wake_date ?? null,
+        time_zone,
+        missing,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Whoop read failed";
+      return blank([message]);
     }
   }
 }
