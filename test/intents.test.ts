@@ -31,6 +31,10 @@ test("log_intent writes only the local store and counts the day", () => {
       calls.push("getWorkouts");
       return { workouts: [], errors: [] };
     },
+    async getLastWakeTime() {
+      return { sleep: null, awake_now: false, errors: [] };
+    },
+
   };
   const service = new CoachService(
     new JsonIntentStore(path.join(dir, "intents.json")),
