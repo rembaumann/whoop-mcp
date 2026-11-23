@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
-import { writeTokens } from "../src/auth/tokens.js";
+import { readTokens, writeTokens } from "../src/auth/tokens.js";
 import type { AppConfig } from "../src/config.js";
 import { fixedClock } from "../src/dates.js";
 import { CoachService } from "../src/logic/service.js";
@@ -435,6 +435,68 @@ test("get_steps tool returns the partial cycle and does not turn null into zero"
   assert.match(text, /2026-11-05T11:00:00.000Z/);
   assert.equal(text.includes('"step_count": 0'), false);
   await server.close();
+});
+
+
+test("getSteps retries once after HTTP 401 using a forced official token refresh", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whoop-steps-401-"));
+  const app = config(dir);
+  writeTokens(app.tokenPath, {
+    access_token: "access-123",
+    refresh_token: "refresh-456",
+    expires_at: Date.now() + 3_600_000,
+    token_type: "bearer",
+    scope: "read:cycles offline",
+  });
+  const calls: Array<{ method: string; pathname: string; auth: string | null }> = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = new URL(String(input));
+    const method = init?.method ?? "GET";
+    const auth = new Headers(init?.headers).get("authorization");
+    calls.push({ method, pathname: url.pathname, auth });
+    if (url.pathname === "/oauth/oauth2/token") {
+      assert.equal(method, "POST");
+      assert.equal(url.host, "api.prod.whoop.com");
+      return new Response(
+        JSON.stringify({
+          access_token: "fresh-access",
+          refresh_token: "refresh-789",
+          expires_in: 3600,
+          token_type: "bearer",
+          scope: "read:cycles offline",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    assert.equal(method, "GET");
+    assert.equal(url.pathname, "/developer/v2/cycle");
+    if (auth === "Bearer access-123") {
+      return new Response("expired", { status: 401 });
+    }
+    assert.equal(auth, "Bearer fresh-access");
+    return new Response(
+      JSON.stringify({
+        records: [
+          cycle({
+            id: 20,
+            start: "2026-11-04T11:00:00.000Z",
+            end: "2026-11-05T11:00:00.000Z",
+            step_count: 9800,
+          }),
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  };
+  const result = await new WhoopClient(app, fetchImpl).getSteps("2026-11-05", "2026-11-05");
+  assert.deepEqual(
+    calls.map((call) => `${call.method} ${call.pathname}`),
+    ["GET /developer/v2/cycle", "POST /oauth/oauth2/token", "GET /developer/v2/cycle"],
+  );
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.recent[0]?.step_count, 9800);
+  assert.equal(readTokens(app.tokenPath)?.access_token, "fresh-access");
+  assert.equal(fs.existsSync(app.intentPath), false);
 });
 
 function cycle(partial: Partial<ApiCycle> & Pick<ApiCycle, "id" | "start">): ApiCycle {
