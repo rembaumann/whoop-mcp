@@ -314,6 +314,10 @@ test("getWorkouts uses today in the configured timezone and defaults to seven da
         errors: [],
       };
     },
+    async getLastWakeTime() {
+      return { sleep: null, awake_now: false, errors: [] };
+    },
+
   };
   const service = new CoachService(
     new JsonIntentStore(path.join(dir, "intents.json")),
@@ -378,6 +382,10 @@ test("get_workouts tool is read-only and returns mapped sessions", async () => {
         errors: [],
       };
     },
+    async getLastWakeTime() {
+      return { sleep: null, awake_now: false, errors: [] };
+    },
+
   };
   const service = new CoachService(
     new JsonIntentStore(path.join(dir, "intents.json")),
